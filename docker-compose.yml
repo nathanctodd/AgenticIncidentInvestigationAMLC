@@ -1,0 +1,73 @@
+version: "3.8"
+
+services:
+
+  # -----------------------------------------------------------------------
+  # backend: FastAPI checkout service
+  # Ports:  8000 (API + metrics endpoint)
+  # Logs:   ./backend/logs/app.log  (mounted volume)
+  # -----------------------------------------------------------------------
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/logs:/app/logs   # logs are readable on the host at ./backend/logs/app.log
+    environment:
+      - PYTHONUNBUFFERED=1
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # -----------------------------------------------------------------------
+  # frontend: Static checkout UI served by nginx
+  # Ports:  3000 → open http://localhost:3000 in your browser
+  # -----------------------------------------------------------------------
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+  # -----------------------------------------------------------------------
+  # agent: Claude-powered incident investigation agent
+  # Ports:  5001 → open http://localhost:5001 in your browser
+  # Needs:  ANTHROPIC_API_KEY set in your shell environment
+  # -----------------------------------------------------------------------
+  agent:
+    build: ./agent
+    ports:
+      - "5001:5001"
+    volumes:
+      - ./backend/logs:/logs:ro        # read app.log
+      - ./backend:/source:ro           # read main.py source
+    environment:
+      - BACKEND_URL=http://backend:8000
+      - LOG_FILE=/logs/app.log
+      - SOURCE_FILE=/source/main.py
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}   # Claude
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}         # GPT-4o (optional)
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}         # Gemini (optional)
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  # -----------------------------------------------------------------------
+  # incident-generator: Periodically injects failures into the backend.
+  # Set AUTO_INCIDENTS=true to enable automatic cycling.
+  # Default is false — use the frontend UI to trigger failures manually.
+  # -----------------------------------------------------------------------
+  incident-generator:
+    build: ./incident-generator
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      - BACKEND_URL=http://backend:8000
+      - AUTO_INCIDENTS=false   # change to true to enable automatic failure cycling
+      - PYTHONUNBUFFERED=1
+    restart: on-failure

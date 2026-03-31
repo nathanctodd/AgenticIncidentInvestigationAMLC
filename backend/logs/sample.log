@@ -1,0 +1,69 @@
+{"timestamp": "2024-01-15T09:00:00.000000+00:00", "level": "INFO", "service": "checkout-api", "message": "Checkout service starting up"}
+{"timestamp": "2024-01-15T09:00:00.012000+00:00", "level": "INFO", "service": "checkout-api", "message": "Database connection pool initialized (5 connections)"}
+{"timestamp": "2024-01-15T09:00:00.015000+00:00", "level": "INFO", "service": "checkout-api", "message": "Payment provider client configured: https://pay.example.com"}
+{"timestamp": "2024-01-15T09:00:00.018000+00:00", "level": "INFO", "service": "checkout-api", "message": "Checkout service ready — listening on :8000"}
+
+{"timestamp": "2024-01-15T09:01:04.231000+00:00", "level": "INFO", "service": "checkout-api", "message": "Checkout initiated: user=user_001 cart=cart_abc amount=$59.99"}
+{"timestamp": "2024-01-15T09:01:04.253000+00:00", "level": "INFO", "service": "checkout-api", "message": "User record retrieved: id=user_001 email=user_001@shopdemo.com"}
+{"timestamp": "2024-01-15T09:01:04.308000+00:00", "level": "INFO", "service": "checkout-api", "message": "Payment approved: transaction_id=txn_47821"}
+{"timestamp": "2024-01-15T09:01:04.310000+00:00", "level": "INFO", "service": "checkout-api", "message": "Checkout complete: user=user_001 transaction=txn_47821 amount=$59.99"}
+
+{"timestamp": "2024-01-15T09:01:09.441000+00:00", "level": "INFO", "service": "checkout-api", "message": "Checkout initiated: user=user_003 cart=cart_ghi amount=$19.99"}
+{"timestamp": "2024-01-15T09:01:09.463000+00:00", "level": "INFO", "service": "checkout-api", "message": "User record retrieved: id=user_003 email=user_003@shopdemo.com"}
+{"timestamp": "2024-01-15T09:01:09.521000+00:00", "level": "INFO", "service": "checkout-api", "message": "Payment approved: transaction_id=txn_83012"}
+{"timestamp": "2024-01-15T09:01:09.523000+00:00", "level": "INFO", "service": "checkout-api", "message": "Checkout complete: user=user_003 transaction=txn_83012 amount=$19.99"}
+
+{"timestamp": "2024-01-15T09:02:15.001000+00:00", "level": "WARNING", "service": "checkout-api", "message": "INCIDENT INJECTED: failure_mode set to 'memory_leak' (was: 'none')"}
+
+{"timestamp": "2024-01-15T09:02:18.114000+00:00", "level": "INFO", "service": "checkout-api", "message": "Checkout initiated: user=user_002 cart=cart_def amount=$124.50"}
+{"timestamp": "2024-01-15T09:02:18.138000+00:00", "level": "WARNING", "service": "checkout-api", "message": "High memory pressure: 1 chunks allocated (0.1 MB above baseline). Adding 0.02s artificial latency."}
+{"timestamp": "2024-01-15T09:02:18.162000+00:00", "level": "INFO", "service": "checkout-api", "message": "Payment approved: transaction_id=txn_29043"}
+{"timestamp": "2024-01-15T09:02:18.164000+00:00", "level": "INFO", "service": "checkout-api", "message": "Checkout complete: user=user_002 transaction=txn_29043 amount=$124.50"}
+
+{"timestamp": "2024-01-15T09:02:23.882000+00:00", "level": "INFO", "service": "checkout-api", "message": "Checkout initiated: user=user_005 cart=cart_mno amount=$9.99"}
+{"timestamp": "2024-01-15T09:02:23.906000+00:00", "level": "WARNING", "service": "checkout-api", "message": "High memory pressure: 12 chunks allocated (0.6 MB above baseline). Adding 0.24s artificial latency."}
+{"timestamp": "2024-01-15T09:02:24.155000+00:00", "level": "INFO", "service": "checkout-api", "message": "Payment approved: transaction_id=txn_55109"}
+{"timestamp": "2024-01-15T09:02:24.157000+00:00", "level": "INFO", "service": "checkout-api", "message": "Checkout complete: user=user_005 transaction=txn_55109 amount=$9.99"}
+
+{"timestamp": "2024-01-15T09:02:48.771000+00:00", "level": "INFO", "service": "checkout-api", "message": "Checkout initiated: user=user_001 cart=cart_abc amount=$59.99"}
+{"timestamp": "2024-01-15T09:02:48.795000+00:00", "level": "WARNING", "service": "checkout-api", "message": "High memory pressure: 47 chunks allocated (2.4 MB above baseline). Adding 0.94s artificial latency."}
+{"timestamp": "2024-01-15T09:02:49.741000+00:00", "level": "INFO", "service": "checkout-api", "message": "Payment approved: transaction_id=txn_61884"}
+{"timestamp": "2024-01-15T09:02:49.743000+00:00", "level": "INFO", "service": "checkout-api", "message": "Checkout complete: user=user_001 transaction=txn_61884 amount=$59.99"}
+
+{"timestamp": "2024-01-15T09:04:01.009000+00:00", "level": "WARNING", "service": "checkout-api", "message": "INCIDENT INJECTED: failure_mode set to 'code_bug' (was: 'none')"}
+
+{"timestamp": "2024-01-15T09:04:04.223000+00:00", "level": "INFO", "service": "checkout-api", "message": "Checkout initiated: user=user_004 cart=cart_jkl amount=$250.00"}
+{"timestamp": "2024-01-15T09:04:04.247000+00:00", "level": "INFO", "service": "checkout-api", "message": "User record retrieved: id=user_004 email=user_004@shopdemo.com"}
+{"timestamp": "2024-01-15T09:04:04.302000+00:00", "level": "INFO", "service": "checkout-api", "message": "Payment approved: transaction_id=txn_77203"}
+{"timestamp": "2024-01-15T09:04:04.304000+00:00", "level": "INFO", "service": "checkout-api", "message": "Checkout complete: user=user_004 transaction=txn_77203 amount=$250.00"}
+
+{"timestamp": "2024-01-15T09:04:09.881000+00:00", "level": "INFO", "service": "checkout-api", "message": "Checkout initiated: user=user_002 cart=cart_def amount=$124.50"}
+{"timestamp": "2024-01-15T09:04:09.902000+00:00", "level": "DEBUG", "service": "checkout-api", "message": "DB returned None for user_id='user_002'"}
+{"timestamp": "2024-01-15T09:04:09.903000+00:00", "level": "ERROR", "service": "checkout-api", "message": "NullPointerException: user object is None for user_id='user_002'. Cannot read attribute 'email' on NoneType. Traceback: 'NoneType' object is not subscriptable", "exception": "Traceback (most recent call last):\n  File \"/app/main.py\", line 142, in checkout\n    email = user[\"email\"]   # TypeError: 'NoneType' is not subscriptable\nTypeError: 'NoneType' object is not subscriptable"}
+
+{"timestamp": "2024-01-15T09:04:15.441000+00:00", "level": "INFO", "service": "checkout-api", "message": "Checkout initiated: user=user_001 cart=cart_abc amount=$59.99"}
+{"timestamp": "2024-01-15T09:04:15.463000+00:00", "level": "INFO", "service": "checkout-api", "message": "User record retrieved: id=user_001 email=user_001@shopdemo.com"}
+{"timestamp": "2024-01-15T09:04:15.521000+00:00", "level": "INFO", "service": "checkout-api", "message": "Payment approved: transaction_id=txn_34521"}
+{"timestamp": "2024-01-15T09:04:15.523000+00:00", "level": "INFO", "service": "checkout-api", "message": "Checkout complete: user=user_001 transaction=txn_34521 amount=$59.99"}
+
+{"timestamp": "2024-01-15T09:04:20.119000+00:00", "level": "INFO", "service": "checkout-api", "message": "Checkout initiated: user=user_003 cart=cart_ghi amount=$19.99"}
+{"timestamp": "2024-01-15T09:04:20.141000+00:00", "level": "DEBUG", "service": "checkout-api", "message": "DB returned None for user_id='user_003'"}
+{"timestamp": "2024-01-15T09:04:20.142000+00:00", "level": "ERROR", "service": "checkout-api", "message": "NullPointerException: user object is None for user_id='user_003'. Cannot read attribute 'email' on NoneType. Traceback: 'NoneType' object is not subscriptable", "exception": "Traceback (most recent call last):\n  File \"/app/main.py\", line 142, in checkout\n    email = user[\"email\"]   # TypeError: 'NoneType' is not subscriptable\nTypeError: 'NoneType' object is not subscriptable"}
+
+{"timestamp": "2024-01-15T09:05:30.002000+00:00", "level": "WARNING", "service": "checkout-api", "message": "INCIDENT INJECTED: failure_mode set to 'payment_outage' (was: 'none')"}
+
+{"timestamp": "2024-01-15T09:05:33.441000+00:00", "level": "INFO", "service": "checkout-api", "message": "Checkout initiated: user=user_001 cart=cart_abc amount=$59.99"}
+{"timestamp": "2024-01-15T09:05:33.463000+00:00", "level": "INFO", "service": "checkout-api", "message": "User record retrieved: id=user_001 email=user_001@shopdemo.com"}
+{"timestamp": "2024-01-15T09:05:33.481000+00:00", "level": "WARNING", "service": "checkout-api", "message": "Payment provider returned HTTP 503 Service Unavailable — upstream dependency is down"}
+{"timestamp": "2024-01-15T09:05:33.482000+00:00", "level": "WARNING", "service": "checkout-api", "message": "Retrying payment request (attempt 2/3)..."}
+{"timestamp": "2024-01-15T09:05:33.984000+00:00", "level": "WARNING", "service": "checkout-api", "message": "Retrying payment request (attempt 3/3)..."}
+{"timestamp": "2024-01-15T09:05:34.487000+00:00", "level": "ERROR", "service": "checkout-api", "message": "All retry attempts exhausted. Payment provider unreachable. Manual escalation required."}
+{"timestamp": "2024-01-15T09:05:34.489000+00:00", "level": "ERROR", "service": "checkout-api", "message": "Checkout failed for cart=cart_abc: payment provider is unavailable. Customer charge was NOT processed."}
+
+{"timestamp": "2024-01-15T09:05:38.991000+00:00", "level": "INFO", "service": "checkout-api", "message": "Checkout initiated: user=user_004 cart=cart_jkl amount=$250.00"}
+{"timestamp": "2024-01-15T09:05:39.013000+00:00", "level": "INFO", "service": "checkout-api", "message": "User record retrieved: id=user_004 email=user_004@shopdemo.com"}
+{"timestamp": "2024-01-15T09:05:39.031000+00:00", "level": "WARNING", "service": "checkout-api", "message": "Payment provider returned HTTP 503 Service Unavailable — upstream dependency is down"}
+{"timestamp": "2024-01-15T09:05:39.032000+00:00", "level": "WARNING", "service": "checkout-api", "message": "Retrying payment request (attempt 2/3)..."}
+{"timestamp": "2024-01-15T09:05:39.534000+00:00", "level": "WARNING", "service": "checkout-api", "message": "Retrying payment request (attempt 3/3)..."}
+{"timestamp": "2024-01-15T09:05:40.036000+00:00", "level": "ERROR", "service": "checkout-api", "message": "All retry attempts exhausted. Payment provider unreachable. Manual escalation required."}
+{"timestamp": "2024-01-15T09:05:40.038000+00:00", "level": "ERROR", "service": "checkout-api", "message": "Checkout failed for cart=cart_jkl: payment provider is unavailable. Customer charge was NOT processed."}

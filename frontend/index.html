@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ShopDemo Checkout</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #f5f5f5; color: #222; }
+
+    header {
+      background: #1a1a2e; color: #fff;
+      padding: 16px 32px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    header h1 { font-size: 1.3rem; font-weight: 600; }
+    header span { font-size: 0.8rem; background: #e74c3c; padding: 2px 8px; border-radius: 4px; }
+
+    main { max-width: 900px; margin: 32px auto; padding: 0 16px; display: grid; gap: 24px; grid-template-columns: 1fr 1fr; }
+
+    .card {
+      background: #fff; border-radius: 8px;
+      padding: 24px; box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    }
+    .card h2 { font-size: 1rem; font-weight: 600; margin-bottom: 16px; color: #444; text-transform: uppercase; letter-spacing: 0.05em; }
+
+    label { display: block; font-size: 0.85rem; color: #666; margin-bottom: 4px; margin-top: 12px; }
+    input, select {
+      width: 100%; padding: 8px 12px;
+      border: 1px solid #ddd; border-radius: 6px;
+      font-size: 0.95rem;
+    }
+    input:focus, select:focus { outline: none; border-color: #5c7cfa; }
+
+    button {
+      display: block; width: 100%; margin-top: 20px;
+      padding: 12px; border: none; border-radius: 6px;
+      font-size: 1rem; font-weight: 600; cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    button:hover { opacity: 0.88; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-primary { background: #5c7cfa; color: #fff; }
+    .btn-danger  { background: #e74c3c; color: #fff; }
+    .btn-neutral { background: #555; color: #fff; }
+
+    /* ---- Transaction progress ---- */
+    #tx-progress {
+      margin-top: 16px;
+      display: none;
+    }
+    #tx-status {
+      font-size: 0.85rem; color: #555;
+      display: flex; justify-content: space-between; align-items: baseline;
+      margin-bottom: 6px;
+    }
+    #tx-elapsed {
+      font-size: 1.1rem; font-weight: 700; font-family: monospace;
+      color: #1a1a2e;
+      transition: color 0.3s;
+    }
+    #tx-elapsed.warn { color: #e67e22; }
+    #tx-elapsed.crit { color: #e74c3c; }
+
+    #tx-bar-track {
+      height: 8px; background: #eee; border-radius: 4px; overflow: hidden;
+    }
+    #tx-bar-fill {
+      height: 100%; width: 0%; border-radius: 4px;
+      background: #5c7cfa;
+      transition: background 0.3s;
+    }
+
+    #response {
+      margin-top: 12px; padding: 12px 16px;
+      border-radius: 6px; font-size: 0.9rem;
+      white-space: pre-wrap; font-family: monospace;
+      display: none;
+    }
+    .ok    { background: #eaffea; border: 1px solid #6fcf97; color: #1a7a3d; }
+    .error { background: #fff0f0; border: 1px solid #eb5757; color: #c0392b; }
+
+    /* ---- Metrics ---- */
+    .metric-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .metric {
+      background: #f8f8f8; border-radius: 6px;
+      padding: 12px 16px;
+    }
+    .metric .label { font-size: 0.75rem; color: #888; text-transform: uppercase; letter-spacing: 0.04em; }
+    .metric .value { font-size: 1.4rem; font-weight: 700; margin-top: 4px; }
+    .metric .value.warn { color: #e67e22; }
+    .metric .value.crit { color: #e74c3c; }
+
+    /* ---- Latency health bar (inside the latency metric tile) ---- */
+    .latency-bar-track {
+      margin-top: 8px; height: 6px;
+      background: #e0e0e0; border-radius: 3px; overflow: hidden;
+    }
+    .latency-bar-fill {
+      height: 100%; width: 0%;
+      border-radius: 3px;
+      transition: width 0.6s ease, background 0.6s ease;
+      background: #27ae60;
+    }
+    .latency-bar-fill.warn { background: #e67e22; }
+    .latency-bar-fill.crit { background: #e74c3c; }
+
+    #failure-badge {
+      display: inline-block; padding: 4px 10px;
+      border-radius: 12px; font-size: 0.8rem; font-weight: 600;
+      margin-bottom: 12px;
+    }
+    .badge-none    { background: #eaffea; color: #27ae60; }
+    .badge-active  { background: #fff0f0; color: #e74c3c; }
+
+    .full-width { grid-column: 1 / -1; }
+
+    #log-tail {
+      background: #1a1a2e; color: #a8d8a8;
+      font-family: monospace; font-size: 0.78rem;
+      padding: 12px; border-radius: 6px;
+      height: 160px; overflow-y: auto;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>ShopDemo</h1>
+  <span>Checkout Service</span>
+</header>
+
+<main>
+  <!-- Checkout form -->
+  <div class="card">
+    <h2>Place Order</h2>
+
+    <label for="user_id">User ID</label>
+    <input id="user_id" value="user_001" />
+
+    <label for="cart_id">Cart ID</label>
+    <input id="cart_id" value="cart_abc" />
+
+    <label for="amount">Amount ($)</label>
+    <input id="amount" type="number" step="0.01" value="59.99" />
+
+    <button class="btn-primary" id="checkout-btn" onclick="submitCheckout()">Checkout</button>
+
+    <!-- Live transaction progress (visible only during a request) -->
+    <div id="tx-progress">
+      <div id="tx-status">
+        <span id="tx-label">Processing payment...</span>
+        <span id="tx-elapsed">0 ms</span>
+      </div>
+      <div id="tx-bar-track">
+        <div id="tx-bar-fill"></div>
+      </div>
+    </div>
+
+    <div id="response"></div>
+  </div>
+
+  <!-- Live metrics -->
+  <div class="card">
+    <h2>Live Metrics</h2>
+    <div id="failure-badge" class="badge-none">mode: none</div>
+    <div class="metric-grid">
+      <div class="metric">
+        <div class="label">Error Rate</div>
+        <div class="value" id="m-error-rate">—</div>
+      </div>
+
+      <!-- Latency tile with health bar -->
+      <div class="metric">
+        <div class="label">Latency (ms)</div>
+        <div class="value" id="m-latency">—</div>
+        <div class="latency-bar-track">
+          <div class="latency-bar-fill" id="latency-bar"></div>
+        </div>
+      </div>
+
+      <div class="metric">
+        <div class="label">Memory (MB)</div>
+        <div class="value" id="m-memory">—</div>
+      </div>
+      <div class="metric">
+        <div class="label">DB Connections</div>
+        <div class="value" id="m-db">—</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Failure controls -->
+  <div class="card">
+    <h2>Inject Failure (Admin)</h2>
+    <label for="failure-mode">Failure Mode</label>
+    <select id="failure-mode">
+      <option value="none">none — normal operation</option>
+      <option value="memory_leak">memory_leak — latency + OOM over time</option>
+      <option value="code_bug">code_bug — NullPointerException on 30% of checkouts</option>
+      <option value="payment_outage">payment_outage — HTTP 503 from payment provider</option>
+    </select>
+    <button class="btn-danger" onclick="setFailure()">Inject Failure</button>
+    <button class="btn-neutral" style="margin-top:8px" onclick="reset()">Reset to Normal</button>
+  </div>
+
+  <!-- Log tail -->
+  <div class="card">
+    <h2>Recent Logs (live tail)</h2>
+    <div id="log-tail">Waiting for logs…</div>
+  </div>
+</main>
+
+<script>
+  const API = "http://localhost:8000";
+  const LATENCY_MAX_MS = 3000;   // bar fills at this value
+
+  // ---------------------------------------------------------------------------
+  // Transaction progress bar
+  // ---------------------------------------------------------------------------
+  let rafId = null;
+  let txStart = null;
+
+  function startProgress() {
+    txStart = performance.now();
+    const progress  = document.getElementById("tx-progress");
+    const fill      = document.getElementById("tx-bar-fill");
+    const elapsed   = document.getElementById("tx-elapsed");
+    const label     = document.getElementById("tx-label");
+    const response  = document.getElementById("response");
+
+    response.style.display = "none";
+    progress.style.display = "block";
+    label.textContent = "Processing payment...";
+
+    function tick() {
+      const ms = Math.round(performance.now() - txStart);
+      elapsed.textContent = ms.toLocaleString() + " ms";
+
+      // Color the counter: green → orange → red
+      if (ms > 1000)      { elapsed.className = "crit"; }
+      else if (ms > 300)  { elapsed.className = "warn"; }
+      else                { elapsed.className = ""; }
+
+      // Bar grows quickly at first, then slows — never reaches 100% while waiting
+      // Uses an asymptotic curve so there's always room left
+      const pct = (1 - Math.exp(-ms / 1500)) * 90;
+      fill.style.width = pct + "%";
+      if (ms > 1000)      fill.style.background = "#e74c3c";
+      else if (ms > 300)  fill.style.background = "#e67e22";
+      else                fill.style.background = "#5c7cfa";
+
+      rafId = requestAnimationFrame(tick);
+    }
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function stopProgress(success) {
+    cancelAnimationFrame(rafId);
+    const ms       = Math.round(performance.now() - txStart);
+    const fill     = document.getElementById("tx-bar-fill");
+    const elapsed  = document.getElementById("tx-elapsed");
+    const label    = document.getElementById("tx-label");
+
+    // Snap bar to 100% with result color
+    fill.style.transition = "width 0.2s ease, background 0.2s ease";
+    fill.style.width = "100%";
+    fill.style.background = success ? "#27ae60" : "#e74c3c";
+    elapsed.textContent = ms.toLocaleString() + " ms";
+    elapsed.className = success ? "" : "crit";
+    label.textContent = success ? "Completed in" : "Failed after";
+
+    // Reset bar transition for next time
+    setTimeout(() => {
+      fill.style.transition = "background 0.3s";
+    }, 300);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Checkout
+  // ---------------------------------------------------------------------------
+  async function submitCheckout() {
+    const btn  = document.getElementById("checkout-btn");
+    const resp = document.getElementById("response");
+    btn.disabled = true;
+    startProgress();
+
+    const body = {
+      user_id: document.getElementById("user_id").value,
+      cart_id:  document.getElementById("cart_id").value,
+      amount:   parseFloat(document.getElementById("amount").value),
+    };
+
+    try {
+      const r = await fetch(`${API}/checkout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await r.json();
+      stopProgress(r.ok);
+
+      resp.style.display = "block";
+      if (r.ok) {
+        resp.className = "ok";
+        resp.textContent = `SUCCESS\ntransaction_id: ${data.transaction_id}\namount: $${data.amount}`;
+      } else {
+        resp.className = "error";
+        resp.textContent = `ERROR ${r.status}\n${data.detail}`;
+      }
+    } catch (err) {
+      stopProgress(false);
+      resp.style.display = "block";
+      resp.className = "error";
+      resp.textContent = `Network error: ${err.message}`;
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Failure injection
+  // ---------------------------------------------------------------------------
+  async function setFailure() {
+    const mode = document.getElementById("failure-mode").value;
+    await fetch(`${API}/admin/set-failure`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode }),
+    });
+    refreshMetrics();
+  }
+
+  async function reset() {
+    await fetch(`${API}/admin/reset`, { method: "POST" });
+    refreshMetrics();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Metrics polling
+  // ---------------------------------------------------------------------------
+  async function refreshMetrics() {
+    try {
+      const r = await fetch(`${API}/metrics`);
+      const m = await r.json();
+
+      const badge = document.getElementById("failure-badge");
+      badge.textContent = `mode: ${m.failure_mode}`;
+      badge.className = m.failure_mode === "none" ? "badge-none" : "badge-active";
+
+      setValue("m-error-rate", (m.error_rate * 100).toFixed(1) + "%",
+        m.error_rate > 0.1 ? "crit" : m.error_rate > 0 ? "warn" : "");
+
+      setValue("m-latency", m.latency_ms + " ms",
+        m.latency_ms > 500 ? "crit" : m.latency_ms > 200 ? "warn" : "");
+
+      // Latency health bar
+      const bar = document.getElementById("latency-bar");
+      const pct = Math.min((m.latency_ms / LATENCY_MAX_MS) * 100, 100);
+      bar.style.width = pct + "%";
+      bar.className = "latency-bar-fill" +
+        (m.latency_ms > 500 ? " crit" : m.latency_ms > 200 ? " warn" : "");
+
+      setValue("m-memory", m.memory_usage_mb + " MB",
+        m.memory_usage_mb > 200 ? "crit" : m.memory_usage_mb > 120 ? "warn" : "");
+
+      setValue("m-db", m.db_connections, "");
+    } catch (_) { /* backend not ready */ }
+  }
+
+  function setValue(id, text, cls) {
+    const el = document.getElementById(id);
+    el.textContent = text;
+    el.className = "value " + cls;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Log tail
+  // ---------------------------------------------------------------------------
+  const logLines = [];
+  async function pollLogs() {
+    try {
+      const r = await fetch(`${API}/metrics`);
+      const m = await r.json();
+      const ts = new Date().toISOString().replace("T", " ").slice(0, 19);
+      let line = "";
+
+      if (m.failure_mode === "memory_leak")
+        line = `${ts} WARN  Memory ${m.memory_usage_mb} MB | latency ${m.latency_ms} ms`;
+      else if (m.failure_mode === "code_bug" && m.error_rate > 0)
+        line = `${ts} ERROR NullPointerException in checkout — see logs/app.log`;
+      else if (m.failure_mode === "payment_outage")
+        line = `${ts} ERROR Payment provider HTTP 503 — upstream unavailable`;
+      else if (m.request_count % 5 === 0 && m.request_count > 0)
+        line = `${ts} INFO  ${m.request_count} requests processed | error_rate=${(m.error_rate*100).toFixed(1)}%`;
+
+      if (line) {
+        logLines.push(line);
+        if (logLines.length > 30) logLines.shift();
+        const tail = document.getElementById("log-tail");
+        tail.textContent = logLines.join("\n");
+        tail.scrollTop = tail.scrollHeight;
+      }
+    } catch (_) {}
+  }
+
+  setInterval(refreshMetrics, 2000);
+  setInterval(pollLogs, 3000);
+  refreshMetrics();
+</script>
+</body>
+</html>

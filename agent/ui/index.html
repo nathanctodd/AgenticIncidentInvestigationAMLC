@@ -1,0 +1,1186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Incident Investigation Agent</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:           #0d1117;
+      --surface:      #161b22;
+      --surface2:     #1c2128;
+      --border:       #30363d;
+      --text:         #e6edf3;
+      --muted:        #7d8590;
+      --blue:         #58a6ff;
+      --green:        #3fb950;
+      --yellow:       #d29922;
+      --orange:       #e3b341;
+      --red:          #f85149;
+      --purple:       #bc8cff;
+      --claude-color: #d97706;
+      --openai-color: #10a37f;
+      --gemini-color: #4285f4;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      font-size: 15px;
+    }
+
+    /* ── Header ── */
+    .header {
+      border-bottom: 1px solid var(--border);
+      padding: 12px 28px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      background: var(--surface);
+      position: sticky;
+      top: 0;
+      z-index: 20;
+    }
+    .header-icon { font-size: 20px; }
+    .header-title { font-size: 15px; font-weight: 700; color: var(--text); }
+    .header-sub   { font-size: 11px; color: var(--muted); margin-top: 1px; }
+    .stream-pill {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--muted);
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 4px 12px;
+    }
+    .stream-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--muted);
+      flex-shrink: 0;
+      transition: background 0.3s;
+    }
+    .stream-dot.connected  { background: var(--green); }
+    .stream-dot.connecting { background: var(--yellow); animation: pulse 1.2s infinite; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.25; }
+    }
+
+    /* ── Fixed approval bar ── */
+    .approval-bar {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;  /* above header */
+      background: #2a0a0a;
+      border-bottom: 2px solid var(--red);
+      padding: 10px 28px;
+      align-items: center;
+      gap: 12px;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    .approval-bar.visible { display: flex; animation: none; }
+    .approval-bar-icon { font-size: 18px; flex-shrink: 0; }
+    .approval-bar-text { font-size: 13px; color: var(--text); flex: 1; }
+    .approval-bar-text strong { color: var(--yellow); }
+    .approval-bar .btn-approve {
+      background: var(--green); border: none; border-radius: 6px;
+      color: #0d1117; font-size: 13px; font-weight: 700;
+      padding: 7px 20px; cursor: pointer;
+    }
+    .approval-bar .btn-approve:hover { opacity: 0.85; }
+    .approval-bar .btn-deny {
+      background: transparent; border: 1px solid var(--red); border-radius: 6px;
+      color: var(--red); font-size: 13px; font-weight: 700;
+      padding: 7px 20px; cursor: pointer;
+    }
+    .approval-bar .btn-deny:hover { opacity: 0.75; }
+    .approval-bar .btn-scroll {
+      background: transparent; border: 1px solid var(--border); border-radius: 6px;
+      color: var(--muted); font-size: 12px; padding: 5px 12px; cursor: pointer;
+    }
+    .approval-bar .btn-scroll:hover { color: var(--text); border-color: #555; }
+
+    /* ── Restart action button (shows in investigation card after memory_leak report) ── */
+    .restart-action {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: #12200a;
+      border: 1px solid var(--green);
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-top: 8px;
+    }
+    .restart-action-text { font-size: 13px; color: var(--text); flex: 1; }
+    .restart-action-text strong { color: var(--green); }
+    .btn-restart {
+      background: var(--green); border: none; border-radius: 6px;
+      color: #0d1117; font-size: 13px; font-weight: 700;
+      padding: 8px 22px; cursor: pointer; white-space: nowrap;
+    }
+    .btn-restart:hover { opacity: 0.85; }
+    .btn-restart:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ── Layout ── */
+    .main {
+      max-width: 880px;
+      margin: 0 auto;
+      padding: 24px 24px 80px;
+    }
+
+    /* ── Metrics bar ── */
+    .metrics-bar {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 18px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 0;
+    }
+    .metric-box {
+      flex: 1;
+      padding: 0 16px;
+      border-right: 1px solid var(--border);
+    }
+    .metric-box:first-child { padding-left: 0; }
+    .metric-box:last-of-type { border-right: none; }
+    .metric-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .metric-value {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+    }
+    .metric-value.warn  { color: var(--yellow); }
+    .metric-value.crit  { color: var(--red); }
+    .metric-value.ok    { color: var(--green); }
+
+    .metric-age {
+      font-size: 11px;
+      color: var(--muted);
+      white-space: nowrap;
+      margin-left: 16px;
+      flex-shrink: 0;
+    }
+
+    /* failure mode badge inside metrics bar */
+    .mode-badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .mode-none    { background: #0c1f0c; color: var(--green); }
+    .mode-memory  { background: #1f1a0c; color: var(--yellow); }
+    .mode-bug     { background: #1f0c0c; color: var(--red); }
+    .mode-payment { background: #1a0c1f; color: var(--purple); }
+    .mode-unknown { background: var(--surface2); color: var(--muted); }
+
+    /* ── Section label ── */
+    .section-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 10px;
+    }
+
+    /* ── Manual form (collapsible) ── */
+    details.trigger-details {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 24px;
+      overflow: hidden;
+    }
+    summary.trigger-summary {
+      padding: 13px 18px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      cursor: pointer;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      user-select: none;
+      transition: color 0.15s;
+    }
+    summary.trigger-summary:hover { color: var(--text); }
+    summary.trigger-summary::after {
+      content: '▸';
+      margin-left: auto;
+      font-size: 11px;
+      transition: transform 0.2s;
+    }
+    details[open] summary.trigger-summary { color: var(--text); }
+    details[open] summary.trigger-summary::after { transform: rotate(90deg); }
+    .trigger-body {
+      padding: 0 18px 18px;
+      border-top: 1px solid var(--border);
+    }
+
+    /* provider row inside form */
+    .provider-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 0 10px;
+      flex-wrap: wrap;
+    }
+    .provider-label { font-size: 12px; color: var(--muted); white-space: nowrap; }
+    .provider-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 500;
+      padding: 5px 14px;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .provider-btn:hover:not(:disabled)          { color: var(--text); border-color: #555; }
+    .provider-btn:disabled                      { opacity: 0.35; cursor: not-allowed; }
+    .provider-btn[data-id="claude"].active      { background: #2a1a06; border-color: var(--claude-color); color: var(--claude-color); }
+    .provider-btn[data-id="openai"].active      { background: #061a12; border-color: var(--openai-color); color: var(--openai-color); }
+    .provider-btn[data-id="gemini"].active      { background: #061020; border-color: var(--gemini-color); color: var(--gemini-color); }
+    .provider-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+    .provider-unavail { font-size: 10px; opacity: 0.7; margin-left: 2px; }
+
+    /* textarea + quick buttons */
+    .section-label-sm { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
+    textarea {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 14px;
+      font-family: inherit;
+      padding: 10px 12px;
+      resize: vertical;
+      min-height: 64px;
+      outline: none;
+      transition: border-color 0.15s;
+      line-height: 1.5;
+    }
+    textarea:focus { border-color: var(--blue); }
+    textarea::placeholder { color: var(--muted); }
+    .quick-row {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-top: 8px;
+    }
+    .quick-label { font-size: 12px; color: var(--muted); }
+    .quick-btn {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      color: var(--muted);
+      font-size: 12px;
+      padding: 4px 12px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .quick-btn:hover { border-color: var(--blue); color: var(--blue); }
+    .form-footer {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 12px;
+    }
+    .btn-investigate {
+      background: var(--blue);
+      border: none;
+      border-radius: 7px;
+      color: #0d1117;
+      font-size: 13px;
+      font-weight: 700;
+      padding: 8px 20px;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .btn-investigate:hover    { opacity: 0.88; }
+    .btn-investigate:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    /* ── Investigation cards ── */
+    .inv-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 16px;
+      overflow: hidden;
+      animation: slideIn 0.25s ease;
+    }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .inv-header {
+      padding: 11px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface2);
+      flex-wrap: wrap;
+    }
+    .inv-badge {
+      font-size: 10px;
+      font-weight: 800;
+      padding: 2px 7px;
+      border-radius: 4px;
+      letter-spacing: 0.06em;
+      flex-shrink: 0;
+    }
+    .inv-badge-auto   { background: #1a0c1a; color: var(--purple); border: 1px solid #4a2a5a; }
+    .inv-badge-manual { background: #061020; color: var(--blue);   border: 1px solid #1a3060; }
+    .inv-mode {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .inv-provider {
+      font-size: 12px;
+      color: var(--muted);
+      margin-left: 2px;
+    }
+    .inv-time {
+      font-size: 11px;
+      color: var(--muted);
+      margin-left: auto;
+      white-space: nowrap;
+    }
+    .inv-spinner {
+      width: 10px; height: 10px;
+      border: 2px solid var(--border);
+      border-top-color: var(--yellow);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      flex-shrink: 0;
+    }
+    .inv-done-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .inv-alert {
+      padding: 10px 16px;
+      font-size: 13px;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      line-height: 1.5;
+      font-style: italic;
+    }
+    .inv-events {
+      padding: 10px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    /* ── Event types inside inv-card ── */
+    .ev-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .ev-status::before {
+      content: '';
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: var(--muted);
+      flex-shrink: 0;
+    }
+
+    .card {
+      border-radius: 7px;
+      padding: 11px 14px;
+      border: 1px solid;
+    }
+    .card-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 7px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    /* thinking */
+    .ev-thinking { background: #13172a; border-color: #2a3158; }
+    .ev-thinking .card-label { color: var(--purple); }
+    .ev-thinking .body { font-size: 12px; color: #9da6c9; font-style: italic; line-height: 1.6; }
+
+    /* tool call */
+    .ev-tool { background: #19160d; border-color: #3b2e00; }
+    .ev-tool .card-label { color: var(--orange); }
+    .ev-tool .tool-name {
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      font-size: 13px; font-weight: 600; color: var(--yellow); margin-bottom: 5px;
+    }
+
+    /* tool result */
+    .ev-result { background: #0c170c; border-color: #1d3a1d; margin-top: -4px; }
+    .ev-result .card-label { color: var(--green); }
+
+    .code-block {
+      background: #0d1117;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 8px 10px;
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      font-size: 11px;
+      color: #b0c4b0;
+      white-space: pre-wrap;
+      word-break: break-all;
+      overflow-x: auto;
+      max-height: 200px;
+      overflow-y: auto;
+      line-height: 1.5;
+    }
+    .ev-tool .code-block { color: var(--muted); margin-top: 5px; }
+
+    /* approval */
+    .ev-approval { background: #1a0d0d; border-color: var(--red); }
+    .ev-approval .card-label { color: var(--red); }
+    .ev-approval .approval-desc { font-size: 13px; color: var(--text); line-height: 1.6; margin-bottom: 12px; }
+    .ev-approval .approval-desc strong { color: var(--yellow); }
+    .approval-btns { display: flex; gap: 8px; }
+    .btn-approve {
+      background: var(--green); border: none; border-radius: 6px;
+      color: #0d1117; font-size: 12px; font-weight: 700; padding: 6px 16px;
+      cursor: pointer; transition: opacity 0.15s;
+    }
+    .btn-approve:hover    { opacity: 0.85; }
+    .btn-approve:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-deny {
+      background: transparent; border: 1px solid var(--red); border-radius: 6px;
+      color: var(--red); font-size: 12px; font-weight: 700; padding: 6px 16px;
+      cursor: pointer; transition: opacity 0.15s;
+    }
+    .btn-deny:hover    { opacity: 0.75; }
+    .btn-deny:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* approval result */
+    .ev-approval-result {
+      font-size: 12px; display: flex; align-items: center; gap: 7px;
+      padding: 3px 0;
+    }
+
+    /* report */
+    .ev-report { background: var(--surface); border-color: var(--green); }
+    .ev-report .card-label { color: var(--green); font-size: 11px; }
+    .report-body { margin-top: 4px; }
+    .report-body h2 { font-size: 17px; font-weight: 700; color: var(--text); margin-bottom: 12px; }
+    .report-body h3 { font-size: 13px; font-weight: 700; color: var(--text); margin: 12px 0 5px; }
+    .report-body p  { font-size: 13px; line-height: 1.7; color: #c9d1d9; margin-bottom: 7px; }
+    .report-body strong { color: var(--text); }
+    .report-body ul, .report-body ol { padding-left: 20px; margin-bottom: 7px; }
+    .report-body li { font-size: 13px; line-height: 1.7; color: #c9d1d9; margin-bottom: 2px; }
+    .report-body code {
+      background: #0d1117; border-radius: 3px; padding: 2px 5px;
+      font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; color: var(--orange);
+    }
+    .report-body pre {
+      background: #0d1117; border: 1px solid var(--border); border-radius: 5px;
+      padding: 10px 12px; overflow-x: auto; margin-bottom: 8px;
+    }
+    .report-body pre code { background: none; padding: 0; font-size: 12px; color: #b0c4de; }
+    .report-body hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
+
+    /* error */
+    .ev-error { background: #180a0a; border-color: var(--red); }
+    .ev-error .card-label { color: var(--red); }
+    .ev-error .body { font-size: 12px; color: var(--red); }
+
+    /* done */
+    .ev-done { font-size: 12px; color: var(--green); font-weight: 600; padding: 4px 0; }
+
+    /* empty state */
+    .empty-state {
+      text-align: center;
+      padding: 48px 24px;
+      color: var(--muted);
+      font-size: 14px;
+      border: 1px dashed var(--border);
+      border-radius: 10px;
+    }
+    .empty-state-icon { font-size: 32px; margin-bottom: 12px; }
+    .empty-state-title { font-weight: 600; color: var(--text); margin-bottom: 6px; }
+
+    /* recovery banner */
+    .recovery-banner {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #0c1f0c;
+      border: 1px solid var(--green);
+      border-radius: 8px;
+      padding: 10px 16px;
+      margin-bottom: 12px;
+      font-size: 13px;
+      color: var(--green);
+      font-weight: 600;
+      animation: slideIn 0.25s ease;
+      transition: opacity 1.5s ease;
+    }
+    .recovery-banner.fade-out { opacity: 0; }
+    .recovery-time { margin-left: auto; font-weight: 400; font-size: 11px; color: var(--muted); }
+
+    /* alert triggered banner */
+    .alert-banner {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: #1f0c0c;
+      border: 1px solid var(--red);
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 12px;
+      animation: slideIn 0.2s ease;
+    }
+    .alert-banner-icon { font-size: 18px; }
+    .alert-banner-text { font-size: 13px; color: var(--text); }
+    .alert-banner-mode { font-weight: 700; color: var(--red); }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-icon">🔍</div>
+  <div>
+    <div class="header-title">Incident Investigation Agent</div>
+    <div class="header-sub" id="headerSub">Automated monitoring · connecting…</div>
+  </div>
+  <div class="stream-pill">
+    <div class="stream-dot connecting" id="streamDot"></div>
+    <span id="streamStatus">Connecting</span>
+  </div>
+</div>
+
+<!-- Sticky approval bar — shown when agent is waiting for human go/no-go -->
+<div class="approval-bar" id="approvalBar">
+  <div class="approval-bar-icon">⚠️</div>
+  <div class="approval-bar-text">
+    Agent wants to run <strong id="approvalBarTool">reset_service</strong> — approval required
+  </div>
+  <button class="btn-approve" id="approvalBarApprove" onclick="approvalBarResolve(true)">✓ Approve</button>
+  <button class="btn-deny"    id="approvalBarDeny"    onclick="approvalBarResolve(false)">✗ Deny</button>
+  <button class="btn-scroll"                          onclick="approvalBarScroll()">↓ Scroll to details</button>
+</div>
+
+<div class="main">
+
+  <!-- Live metrics bar -->
+  <div class="metrics-bar">
+    <div class="metric-box">
+      <div class="metric-label">Status</div>
+      <div class="metric-value" id="mv-status"><span class="mode-badge mode-unknown">—</span></div>
+    </div>
+    <div class="metric-box">
+      <div class="metric-label">Error Rate</div>
+      <div class="metric-value" id="mv-error">—</div>
+    </div>
+    <div class="metric-box">
+      <div class="metric-label">Memory</div>
+      <div class="metric-value" id="mv-memory">—</div>
+    </div>
+    <div class="metric-box" style="border-right:none">
+      <div class="metric-label">Latency</div>
+      <div class="metric-value" id="mv-latency">—</div>
+    </div>
+    <div class="metric-age" id="metricAge"></div>
+  </div>
+
+  <!-- Manual trigger (collapsible) -->
+  <details class="trigger-details">
+    <summary class="trigger-summary">⚡ Trigger manual investigation</summary>
+    <div class="trigger-body">
+
+      <div class="provider-row" id="providerRow">
+        <span class="provider-label">Model:</span>
+        <button class="provider-btn active" data-id="claude" onclick="selectProvider('claude')">
+          <span class="provider-dot"></span> Claude Opus 4.6
+        </button>
+        <button class="provider-btn" data-id="openai" onclick="selectProvider('openai')">
+          <span class="provider-dot"></span> GPT-4o
+        </button>
+        <button class="provider-btn" data-id="gemini" onclick="selectProvider('gemini')">
+          <span class="provider-dot"></span> Gemini 2.0 Flash
+        </button>
+      </div>
+
+      <div class="section-label-sm">Alert description</div>
+      <textarea id="alertInput" placeholder="Describe the incident or paste an alert…"></textarea>
+
+      <div class="quick-row">
+        <span class="quick-label">Quick alerts:</span>
+        <button class="quick-btn" onclick="setAlert('code_bug')">🐛 High error rate (30%)</button>
+        <button class="quick-btn" onclick="setAlert('memory_leak')">📈 Memory / latency degradation</button>
+        <button class="quick-btn" onclick="setAlert('payment_outage')">💳 Payment failures (100%)</button>
+      </div>
+
+      <div class="form-footer">
+        <button class="btn-investigate" id="investigateBtn" onclick="startInvestigation()">
+          ⚡ Investigate
+        </button>
+      </div>
+    </div>
+  </details>
+
+  <!-- Investigations feed -->
+  <div class="section-label">Live Investigations</div>
+  <div id="investigations"></div>
+  <div class="empty-state" id="emptyState">
+    <div class="empty-state-icon">👁</div>
+    <div class="empty-state-title">Monitoring active</div>
+    Watching for failures every 30 seconds. Investigations will appear here automatically.
+  </div>
+
+</div>
+
+<script>
+  // ---------------------------------------------------------------------------
+  // Constants
+  // ---------------------------------------------------------------------------
+  const PROVIDER_META = {
+    claude: { label: 'Claude Opus 4.6',  sub: 'Anthropic · adaptive thinking' },
+    openai: { label: 'GPT-4o',           sub: 'OpenAI' },
+    gemini: { label: 'Gemini 2.0 Flash', sub: 'Google' },
+  };
+
+  const ALERTS = {
+    code_bug:
+      'ALERT: Checkout service error rate spiked to ~30%. ' +
+      'Customers receiving HTTP 500 errors on checkout. ' +
+      'Started approximately 5 minutes ago. No recent deploys.',
+    memory_leak:
+      'ALERT: Memory usage on checkout service climbing steadily. ' +
+      'Latency is increasing with every request. ' +
+      'Service is degrading over time — no errors yet but performance is deteriorating.',
+    payment_outage:
+      'ALERT: All checkout attempts are returning 502 Bad Gateway. ' +
+      'Error rate has hit 100%. No customers can complete purchases.',
+  };
+
+  const ANOMALY_LABELS = {
+    high_error_rate: { label: 'High Error Rate', cls: 'mode-bug' },
+    high_latency:    { label: 'High Latency',    cls: 'mode-payment' },
+    high_memory:     { label: 'High Memory',     cls: 'mode-memory' },
+  };
+
+  // ---------------------------------------------------------------------------
+  // State
+  // ---------------------------------------------------------------------------
+  let selectedProvider  = 'claude';
+  let lastMetricTs      = null;
+  let metricAgeTimer    = null;
+  let investigationCount = 0;
+
+  // ---------------------------------------------------------------------------
+  // Utility
+  // ---------------------------------------------------------------------------
+  function esc(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function nowStr() {
+    return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Provider management
+  // ---------------------------------------------------------------------------
+  async function loadProviders() {
+    try {
+      const data = await fetch('/providers').then(r => r.json());
+      document.querySelectorAll('.provider-btn').forEach(btn => {
+        const id   = btn.dataset.id;
+        const info = data[id];
+        if (!info) return;
+        if (!info.available) {
+          btn.disabled = true;
+          btn.title    = `${info.label} — set ${id.toUpperCase()}_API_KEY to enable`;
+          btn.querySelector('.provider-dot').style.background = 'var(--muted)';
+          btn.insertAdjacentHTML('beforeend', '<span class="provider-unavail">🔒</span>');
+        }
+      });
+      const first = Object.entries(data).find(([, v]) => v.available);
+      if (first) selectProvider(first[0]);
+    } catch (_) {}
+  }
+
+  function selectProvider(id) {
+    const btn = document.querySelector(`.provider-btn[data-id="${id}"]`);
+    if (!btn || btn.disabled) return;
+    selectedProvider = id;
+    document.querySelectorAll('.provider-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Metrics bar
+  // ---------------------------------------------------------------------------
+  function updateMetricsBar(metrics) {
+    lastMetricTs = Date.now();
+
+    // Derive status from metrics thresholds (no failure_mode from backend)
+    const errRate = parseFloat(metrics.error_rate) || 0;
+    const latMs   = parseFloat(metrics.latency_ms) || 0;
+    const memMbVal = parseFloat(metrics.memory_usage_mb) || 0;
+    let statusLabel = 'Normal', statusCls = 'mode-none';
+    if (errRate > 0.10)  { statusLabel = 'High Error Rate'; statusCls = 'mode-bug'; }
+    else if (latMs > 300) { statusLabel = 'High Latency';   statusCls = 'mode-payment'; }
+    else if (memMbVal > 150) { statusLabel = 'High Memory'; statusCls = 'mode-memory'; }
+    document.getElementById('mv-status').innerHTML =
+      `<span class="mode-badge ${statusCls}">${statusLabel}</span>`;
+
+    const errRate = (parseFloat(metrics.error_rate) * 100).toFixed(1);
+    const errEl   = document.getElementById('mv-error');
+    errEl.textContent = errRate + '%';
+    errEl.className   = 'metric-value' + (parseFloat(errRate) > 20 ? ' crit' : parseFloat(errRate) > 5 ? ' warn' : ' ok');
+
+    const memMb  = parseFloat(metrics.memory_usage_mb).toFixed(0);
+    const memEl  = document.getElementById('mv-memory');
+    memEl.textContent = memMb + ' MB';
+    memEl.className   = 'metric-value' + (parseFloat(memMb) > 400 ? ' crit' : parseFloat(memMb) > 200 ? ' warn' : '');
+
+    const lat    = parseFloat(metrics.latency_ms).toFixed(0);
+    const latEl  = document.getElementById('mv-latency');
+    latEl.textContent = lat + ' ms';
+    latEl.className   = 'metric-value' + (parseFloat(lat) > 500 ? ' crit' : parseFloat(lat) > 200 ? ' warn' : '');
+
+    startMetricAge();
+  }
+
+  function startMetricAge() {
+    if (metricAgeTimer) clearInterval(metricAgeTimer);
+    metricAgeTimer = setInterval(() => {
+      if (!lastMetricTs) return;
+      const secs = Math.round((Date.now() - lastMetricTs) / 1000);
+      document.getElementById('metricAge').textContent = `Updated ${secs}s ago`;
+    }, 1000);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Investigation cards
+  // ---------------------------------------------------------------------------
+  const sessionMeta = {};  // sessionId → { anomaly, ... }
+
+  function ensureCard(sessionId, meta) {
+    let card = document.getElementById('inv-' + sessionId);
+    if (card) return card;
+
+    // Store metadata for later (e.g. to show restart button)
+    sessionMeta[sessionId] = meta;
+
+    // Hide empty state
+    document.getElementById('emptyState').style.display = 'none';
+    investigationCount++;
+
+    const badgeCls = meta.triggeredBy === 'manual' ? 'inv-badge-manual' : 'inv-badge-auto';
+    const badgeTxt = meta.triggeredBy === 'manual' ? 'MANUAL' : 'AUTO';
+    const modeLabel = (ANOMALY_LABELS[meta.anomaly] || { label: meta.anomaly || 'Unknown' }).label;
+    const alertShort = (meta.alert || '').slice(0, 120) + ((meta.alert || '').length > 120 ? '…' : '');
+
+    card = document.createElement('div');
+    card.className = 'inv-card';
+    card.id        = 'inv-' + sessionId;
+    card.innerHTML = `
+      <div class="inv-header">
+        <span class="inv-badge ${badgeCls}">${badgeTxt}</span>
+        <span class="inv-mode">${esc(modeLabel)}</span>
+        <span class="inv-provider" id="inv-provider-${sessionId}">—</span>
+        <div class="inv-spinner" id="inv-spinner-${sessionId}"></div>
+        <span class="inv-time">${nowStr()}</span>
+      </div>
+      <div class="inv-alert">${esc(alertShort)}</div>
+      <div class="inv-events" id="inv-events-${sessionId}"></div>
+    `;
+
+    // Prepend: newest investigation at the top
+    const feed = document.getElementById('investigations');
+    feed.insertBefore(card, feed.firstChild);
+    return card;
+  }
+
+  function appendToCard(sessionId, html) {
+    const el = document.getElementById('inv-events-' + sessionId);
+    if (!el) return;
+    const div = document.createElement('div');
+    div.innerHTML = html;
+    el.appendChild(div);
+    div.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function markCardDone(sessionId) {
+    const spinner = document.getElementById('inv-spinner-' + sessionId);
+    if (spinner) {
+      spinner.className = 'inv-done-dot';
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Stream connection
+  // ---------------------------------------------------------------------------
+  function connectStream() {
+    const dot    = document.getElementById('streamDot');
+    const status = document.getElementById('streamStatus');
+
+    dot.className    = 'stream-dot connecting';
+    status.textContent = 'Connecting';
+
+    const es = new EventSource('/stream');
+
+    es.onopen = () => {
+      dot.className      = 'stream-dot connected';
+      status.textContent = 'Live';
+      document.getElementById('headerSub').textContent =
+        'Automated monitoring · live';
+    };
+
+    es.onmessage = (e) => {
+      try { handleStreamEvent(JSON.parse(e.data)); } catch (_) {}
+    };
+
+    es.onerror = () => {
+      dot.className      = 'stream-dot connecting';
+      status.textContent = 'Reconnecting';
+      // EventSource reconnects automatically
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Stream event dispatcher
+  // ---------------------------------------------------------------------------
+  function handleStreamEvent(ev) {
+    switch (ev.type) {
+
+      case 'metrics_update':
+        updateMetricsBar(ev.data);
+        break;
+
+      case 'alert_triggered':
+        // Flash a small banner (auto-removed after investigation_start creates the card)
+        break;
+
+      case 'investigation_start': {
+        ensureCard(ev.session_id, {
+          triggeredBy:  ev.triggered_by,
+          anomaly:      ev.anomaly,
+          alert:        ev.alert,
+        });
+        break;
+      }
+
+      case 'provider': {
+        const el = document.getElementById('inv-provider-' + ev.session_id);
+        if (el) el.textContent = '· ' + ev.label;
+        // Also update header sub if this is the most recent card
+        document.getElementById('headerSub').textContent =
+          `Investigating with ${ev.label}`;
+        break;
+      }
+
+      case 'status':
+        if (ev.session_id) {
+          appendToCard(ev.session_id, `<div class="ev-status">${esc(ev.content)}</div>`);
+        }
+        break;
+
+      case 'thinking':
+        if (ev.session_id) {
+          appendToCard(ev.session_id, `
+            <div class="card ev-thinking">
+              <div class="card-label">💭 Thinking</div>
+              <div class="body">${esc(ev.content)}</div>
+            </div>`);
+        }
+        break;
+
+      case 'tool_call': {
+        if (!ev.session_id) break;
+        const inputStr = Object.keys(ev.input || {}).length > 0
+          ? JSON.stringify(ev.input, null, 2)
+          : '(no arguments)';
+        appendToCard(ev.session_id, `
+          <div class="card ev-tool">
+            <div class="card-label">🔧 Tool Call</div>
+            <div class="tool-name">${esc(ev.name)}</div>
+            <div class="code-block">${esc(inputStr)}</div>
+          </div>`);
+        break;
+      }
+
+      case 'tool_result':
+        if (ev.session_id) {
+          appendToCard(ev.session_id, `
+            <div class="card ev-result">
+              <div class="card-label">✓ Result · ${esc(ev.name)}</div>
+              <div class="code-block">${esc(ev.content)}</div>
+            </div>`);
+        }
+        break;
+
+      case 'approval_needed':
+        if (ev.session_id) {
+          appendToCard(ev.session_id, `
+            <div class="card ev-approval" id="approval-${esc(ev.tool_use_id)}">
+              <div class="card-label">⚠ Human Approval Required</div>
+              <div class="approval-desc">
+                The agent wants to run <strong>${esc(ev.name)}</strong>.<br/>
+                This will reset all service state — clears memory, counters, and the failure mode.
+              </div>
+              <div class="approval-btns">
+                <button class="btn-approve"
+                  onclick="resolveApproval('${esc(ev.session_id)}', '${esc(ev.tool_use_id)}', true)">
+                  ✓ Approve
+                </button>
+                <button class="btn-deny"
+                  onclick="resolveApproval('${esc(ev.session_id)}', '${esc(ev.tool_use_id)}', false)">
+                  ✗ Deny
+                </button>
+              </div>
+            </div>`);
+          // Show sticky bar so approval is always reachable regardless of scroll position
+          showApprovalBar(ev.session_id, ev.tool_use_id, ev.name);
+          // Scroll the approval card into center view
+          setTimeout(() => {
+            const card = document.getElementById('approval-' + ev.tool_use_id);
+            if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }, 100);
+        }
+        break;
+
+      case 'approval_result': {
+        if (!ev.session_id) break;
+        hideApprovalBar();
+        const color = ev.approved ? 'var(--green)' : 'var(--red)';
+        appendToCard(ev.session_id, `
+          <div class="ev-approval-result" style="color:${color}">
+            ${ev.approved ? '✓ Approved' : '✗ Denied'}: <strong>${esc(ev.name)}</strong>
+          </div>`);
+        const approvalCard = document.getElementById(`approval-${ev.tool_use_id || ''}`);
+        if (approvalCard) approvalCard.querySelectorAll('button').forEach(b => b.disabled = true);
+        break;
+      }
+
+      case 'report':
+        if (ev.session_id) {
+          appendToCard(ev.session_id, `
+            <div class="card ev-report">
+              <div class="card-label">📋 Incident Report</div>
+              <div class="report-body">${marked.parse(ev.content)}</div>
+            </div>`);
+        }
+        break;
+
+      case 'error':
+        if (ev.session_id) {
+          appendToCard(ev.session_id, `
+            <div class="card ev-error">
+              <div class="card-label">⚠ Error</div>
+              <div class="body">${esc(ev.content)}</div>
+            </div>`);
+        }
+        break;
+
+      case 'service_recovered': {
+        // Show a green recovery banner at the top of the feed
+        const feed = document.getElementById('investigations');
+        const banner = document.createElement('div');
+        banner.className = 'recovery-banner';
+        banner.innerHTML = `<span>✓</span> Service recovered — monitoring reset, ready for next incident <span class="recovery-time">${nowStr()}</span>`;
+        feed.insertBefore(banner, feed.firstChild);
+        setTimeout(() => banner.classList.add('fade-out'), 8000);
+        break;
+      }
+
+      case 'investigation_end':
+        if (ev.session_id) {
+          const meta = sessionMeta[ev.session_id] || {};
+          const showRestart = meta.anomaly === 'high_memory';
+          appendToCard(ev.session_id, `
+            <div class="ev-done">✓ Investigation complete</div>
+            ${showRestart ? `
+            <div class="restart-action" id="restart-action-${esc(ev.session_id)}">
+              <div class="restart-action-text">
+                Agent recommends restarting the service.
+                <strong>This will clear memory and reset the failure mode.</strong>
+              </div>
+              <button class="btn-restart" onclick="doRestart('${esc(ev.session_id)}', this)">
+                ↺ Restart Service
+              </button>
+            </div>` : ''}
+          `);
+          markCardDone(ev.session_id);
+          document.getElementById('headerSub').textContent =
+            'Automated monitoring · live';
+        }
+        break;
+
+      case 'done':
+        if (ev.session_id) {
+          markCardDone(ev.session_id);
+        }
+        break;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Manual investigation
+  // ---------------------------------------------------------------------------
+  async function startInvestigation() {
+    const alert = document.getElementById('alertInput').value.trim();
+    if (!alert) { document.getElementById('alertInput').focus(); return; }
+
+    const btn = document.getElementById('investigateBtn');
+    btn.disabled = true;
+
+    try {
+      const resp = await fetch('/investigate', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ alert, provider: selectedProvider }),
+      });
+      if (!resp.ok) throw new Error(`Server error ${resp.status}`);
+      // Events arrive via /stream — nothing to do here except re-enable the button
+    } catch (err) {
+      alert('Failed to start investigation: ' + err.message);
+    } finally {
+      setTimeout(() => { btn.disabled = false; }, 1500);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Quick fill
+  // ---------------------------------------------------------------------------
+  function setAlert(mode) {
+    const ta = document.getElementById('alertInput');
+    ta.value = ALERTS[mode];
+    ta.focus();
+    // Open the details panel if it's collapsed
+    const det = document.querySelector('details.trigger-details');
+    if (det) det.open = true;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Direct restart action (always-visible button in investigation card)
+  // ---------------------------------------------------------------------------
+  async function doRestart(sessionId, btn) {
+    if (!confirm('Restart the service now? This will clear memory and the failure mode.')) return;
+    btn.disabled = true;
+    btn.textContent = 'Restarting…';
+    try {
+      const r = await fetch('/actions/reset', { method: 'POST' });
+      const data = await r.json();
+      if (data.ok) {
+        btn.textContent = '✓ Restarted';
+        btn.style.background = 'var(--muted)';
+      } else {
+        btn.textContent = '✗ Failed';
+        btn.disabled = false;
+      }
+    } catch {
+      btn.textContent = '✗ Error';
+      btn.disabled = false;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Approval bar (sticky, always visible when waiting)
+  // ---------------------------------------------------------------------------
+  let pendingApproval = null;  // { sessionId, toolUseId }
+
+  function showApprovalBar(sessionId, toolUseId, toolName) {
+    pendingApproval = { sessionId, toolUseId };
+    document.getElementById('approvalBarTool').textContent = toolName;
+    document.getElementById('approvalBar').classList.add('visible');
+  }
+
+  function hideApprovalBar() {
+    pendingApproval = null;
+    document.getElementById('approvalBar').classList.remove('visible');
+  }
+
+  function approvalBarScroll() {
+    if (!pendingApproval) return;
+    const card = document.getElementById('approval-' + pendingApproval.toolUseId);
+    if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  async function approvalBarResolve(approved) {
+    if (!pendingApproval) return;
+    await resolveApproval(pendingApproval.sessionId, pendingApproval.toolUseId, approved);
+    hideApprovalBar();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Approval
+  // ---------------------------------------------------------------------------
+  async function resolveApproval(sessionId, toolUseId, approved) {
+    const approvalCard = document.getElementById('approval-' + toolUseId);
+    if (approvalCard) approvalCard.querySelectorAll('button').forEach(b => b.disabled = true);
+    hideApprovalBar();
+    const endpoint = approved
+      ? `/investigate/${sessionId}/approve/${toolUseId}`
+      : `/investigate/${sessionId}/deny/${toolUseId}`;
+    try {
+      await fetch(endpoint, { method: 'POST' });
+    } catch (err) {
+      console.error('Approval request failed:', err);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Init
+  // ---------------------------------------------------------------------------
+  loadProviders();
+  connectStream();
+</script>
+</body>
+</html>
