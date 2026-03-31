@@ -449,7 +449,10 @@ async def agent_events(
     yield {"type": "provider", "label": model_label}
     yield {"type": "status",   "content": "Starting investigation…"}
 
-    prov.add_user_text(alert)
+    # TODO: Seed the agent loop with the alert message.
+    # This is the first message the LLM sees — without it, the loop runs
+    # but the model has no context to reason about.
+    # HINT: Call prov.add_user_text(alert)
 
     for step in range(1, 11):
         yield {"type": "status", "content": f"Reasoning… (step {step})"}
