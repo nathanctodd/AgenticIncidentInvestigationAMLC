@@ -82,6 +82,13 @@ gemini_client   = AsyncOpenAI(
 # Tool implementations
 # ---------------------------------------------------------------------------
 
+async def read_source_file() -> str:
+    try:
+        with open(SOURCE_FILE) as f:
+            return f.read()
+    except FileNotFoundError:
+        return f"Source file not found at {SOURCE_FILE}"
+    
 async def get_metrics() -> str:
     async with httpx.AsyncClient() as http:
         r = await http.get(f"{BACKEND_URL}/metrics", timeout=5.0)
@@ -107,14 +114,6 @@ async def get_recent_logs(n: int = 25) -> str:
         return "".join(lines[-n:])
     except FileNotFoundError:
         return f"Log file not found at {LOG_FILE}"
-
-async def read_source_file() -> str:
-    try:
-        with open(SOURCE_FILE) as f:
-            return f.read()
-    except FileNotFoundError:
-        return f"Source file not found at {SOURCE_FILE}"
-
 
 async def reset_service() -> str:
     async with httpx.AsyncClient() as http:

@@ -113,6 +113,28 @@
     }
     .approval-bar .btn-scroll:hover { color: var(--text); border-color: #555; }
 
+    /* ── Floating reset button (sticky bottom-right, shown after memory leak detected) ── */
+    .float-reset-btn {
+      display: none;
+      position: fixed;
+      bottom: 28px;
+      right: 28px;
+      z-index: 99;
+      background: var(--green);
+      color: #0d1117;
+      border: none;
+      border-radius: 10px;
+      padding: 13px 22px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+      transition: opacity 0.2s;
+    }
+    .float-reset-btn.visible { display: block; }
+    .float-reset-btn:hover { opacity: 0.85; }
+    .float-reset-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
     /* ── Restart action button (shows in investigation card after memory_leak report) ── */
     .restart-action {
       display: flex;
@@ -177,6 +199,38 @@
     .metric-value.warn  { color: var(--yellow); }
     .metric-value.crit  { color: var(--red); }
     .metric-value.ok    { color: var(--green); }
+
+    /* ── Thresholds bar ── */
+    .thresholds-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+    .thresholds-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--muted);
+      margin-right: 4px;
+    }
+    .threshold-pill {
+      font-size: 12px;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--muted);
+      transition: background 0.3s, color 0.3s, border-color 0.3s;
+    }
+    .threshold-pill.firing {
+      background: rgba(248, 81, 73, 0.15);
+      color: var(--red);
+      border-color: var(--red);
+    }
 
     .metric-age {
       font-size: 11px;
@@ -598,6 +652,11 @@
   </div>
 </div>
 
+<!-- Floating reset button — shown when agent recommends a service restart -->
+<button class="float-reset-btn" id="floatResetBtn" onclick="doFloatReset(this)">
+  ↺ Reset Service
+</button>
+
 <!-- Sticky approval bar — shown when agent is waiting for human go/no-go -->
 <div class="approval-bar" id="approvalBar">
   <div class="approval-bar-icon">⚠️</div>
@@ -630,6 +689,14 @@
       <div class="metric-value" id="mv-latency">—</div>
     </div>
     <div class="metric-age" id="metricAge"></div>
+  </div>
+
+  <!-- Agent trigger thresholds -->
+  <div class="thresholds-bar">
+    <span class="thresholds-label">Auto-investigation triggers:</span>
+    <span class="threshold-pill" id="thresh-error">Error Rate &gt; 10%</span>
+    <span class="threshold-pill" id="thresh-latency">Latency &gt; 300 ms</span>
+    <span class="threshold-pill" id="thresh-memory">Memory &gt; 150 MB</span>
   </div>
 
   <!-- Manual trigger (collapsible) -->
@@ -779,10 +846,10 @@
     document.getElementById('mv-status').innerHTML =
       `<span class="mode-badge ${statusCls}">${statusLabel}</span>`;
 
-    const errRate = (parseFloat(metrics.error_rate) * 100).toFixed(1);
-    const errEl   = document.getElementById('mv-error');
-    errEl.textContent = errRate + '%';
-    errEl.className   = 'metric-value' + (parseFloat(errRate) > 20 ? ' crit' : parseFloat(errRate) > 5 ? ' warn' : ' ok');
+    const errRatePct = (parseFloat(metrics.error_rate) * 100).toFixed(1);
+    const errEl      = document.getElementById('mv-error');
+    errEl.textContent = errRatePct + '%';
+    errEl.className   = 'metric-value' + (parseFloat(errRatePct) > 20 ? ' crit' : parseFloat(errRatePct) > 5 ? ' warn' : ' ok');
 
     const memMb  = parseFloat(metrics.memory_usage_mb).toFixed(0);
     const memEl  = document.getElementById('mv-memory');
@@ -793,6 +860,11 @@
     const latEl  = document.getElementById('mv-latency');
     latEl.textContent = lat + ' ms';
     latEl.className   = 'metric-value' + (parseFloat(lat) > 500 ? ' crit' : parseFloat(lat) > 200 ? ' warn' : '');
+
+    // Update threshold pills
+    document.getElementById('thresh-error').classList.toggle('firing', errRate > 0.10);
+    document.getElementById('thresh-latency').classList.toggle('firing', latMs > 300);
+    document.getElementById('thresh-memory').classList.toggle('firing', memMbVal > 150);
 
     startMetricAge();
   }
@@ -1016,6 +1088,12 @@
               <div class="card-label">📋 Incident Report</div>
               <div class="report-body">${marked.parse(ev.content)}</div>
             </div>`);
+          // Show floating reset button if the agent recommends a restart
+          const restartKeywords = ['restart', 'reset', 'will a restart help?: yes'];
+          const lower = ev.content.toLowerCase();
+          if (restartKeywords.some(kw => lower.includes(kw))) {
+            showFloatReset();
+          }
         }
         break;
 
@@ -1030,6 +1108,7 @@
         break;
 
       case 'service_recovered': {
+        hideFloatReset();
         // Show a green recovery banner at the top of the feed
         const feed = document.getElementById('investigations');
         const banner = document.createElement('div');
@@ -1106,6 +1185,40 @@
     // Open the details panel if it's collapsed
     const det = document.querySelector('details.trigger-details');
     if (det) det.open = true;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Floating reset button — appears when agent recommends restart
+  // ---------------------------------------------------------------------------
+  function showFloatReset() {
+    document.getElementById('floatResetBtn').classList.add('visible');
+  }
+
+  function hideFloatReset() {
+    const btn = document.getElementById('floatResetBtn');
+    btn.classList.remove('visible');
+    btn.disabled = false;
+    btn.textContent = '↺ Reset Service';
+  }
+
+  async function doFloatReset(btn) {
+    if (!confirm('Reset the service now? This will clear memory and the failure mode.')) return;
+    btn.disabled = true;
+    btn.textContent = 'Resetting…';
+    try {
+      const r = await fetch('/actions/reset', { method: 'POST' });
+      const data = await r.json();
+      if (data.ok) {
+        btn.textContent = '✓ Done';
+        setTimeout(hideFloatReset, 2000);
+      } else {
+        btn.textContent = '✗ Failed';
+        btn.disabled = false;
+      }
+    } catch {
+      btn.textContent = '✗ Error';
+      btn.disabled = false;
+    }
   }
 
   // ---------------------------------------------------------------------------

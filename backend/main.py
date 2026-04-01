@@ -179,8 +179,8 @@ def metrics() -> dict:
     # Memory: 64 MB baseline + 0.5 MB per leaked chunk
     memory_mb = round(64.0 + len(state["memory_store"]) * 0.5, 1)
 
-    # Latency: 45 ms baseline + 20 ms per 10 leaked chunks (capped at 3 s)
-    latency_ms = 45 + min(len(state["memory_store"]) * 2, 3_000)
+    # Latency: 45 ms baseline + 100 ms per chunk (matches time.sleep(chunks * 0.1) in checkout)
+    latency_ms = 45 + min(len(state["memory_store"]) * 100, 2_000)
 
     # DB connections: simulated active pool usage
     db_connections = min(5 + (total % 8), 20)
