@@ -2,7 +2,7 @@
 
 A tiny fictional e-commerce checkout service that intentionally produces
 operational incidents. Used as a target environment in an **AI agent tutorial**
-for agentic incident investigation.
+for agentic incident investigation at the AMLC 2026.
 
 ---
 
@@ -12,17 +12,17 @@ for agentic incident investigation.
 ┌────────────────────────────────────────────────────────────┐
 │  Docker Compose Network                                    │
 │                                                            │
-│  ┌─────────────┐     POST /checkout     ┌──────────────┐  │
-│  │  frontend   │ ──────────────────────▶│   backend    │  │
-│  │  (nginx)    │                        │  (FastAPI)   │  │
-│  │  :3000      │ ◀── JSON response ──── │  :8000       │  │
-│  └─────────────┘                        │              │  │
-│                                         │  /metrics    │  │
-│  ┌──────────────────┐  POST /admin/     │  /checkout   │  │
-│  │ incident-        │  set-failure ────▶│  /health     │  │
-│  │ generator        │                   └──────────────┘  │
+│  ┌─────────────┐     POST /checkout     ┌──────────────┐   │
+│  │  frontend   │ ──────────────────────▶│   backend    │   │
+│  │  (nginx)    │                        │  (FastAPI)   │   │
+│  │  :3000      │ ◀── JSON response ──── │  :8000       │   │
+│  └─────────────┘                        │              │   │
+│                                         │  /metrics    │   │
+│  ┌──────────────────┐  POST /admin/     │  /checkout   │   │
+│  │ incident-        │  set-failure ────▶│  /health     │   │
+│  │ generator        │                   └──────────────┘   │
 │  │ (Python loop)    │                         │            │
-│  └──────────────────┘               logs/app.log          │
+│  └──────────────────┘               logs/app.log           │
 │                                     (volume-mounted)       │
 └────────────────────────────────────────────────────────────┘
 ```
