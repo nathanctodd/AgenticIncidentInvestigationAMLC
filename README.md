@@ -41,7 +41,7 @@ for agentic incident investigation at the AMLC 2026.
 
 ```bash
 # 1. Clone / navigate to the project
-cd ErrorTriaging
+cd AgenticIncidentInvestigationAMLC
 
 # 2. Build and start all services
 docker compose up --build
