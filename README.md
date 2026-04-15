@@ -40,19 +40,25 @@ for agentic incident investigation at the AMLC 2026.
 ## Quick Start
 
 ```bash
+# 0. Clone the repo
+git clone https://github.com/nathanctodd/AgenticIncidentInvestigationAMLC.git
+
 # 1. Clone / navigate to the project
 cd AgenticIncidentInvestigationAMLC
 
-# 2. Build and start all services
+# 2. Obtain an API key from OpenAI, Anthropic, or Gemini and add it to a .env file (example provided in repo)
+echo "OPENAI_API_KEY=sk-..." > .env
+
+# 3. Build and start all services
 docker compose up --build
 
-# 3. Open the UI
+# 4. Open the UI
 open http://localhost:3000
 
-# 4. Watch the logs live
+# 5. Watch the logs live
 tail -f backend/logs/app.log | python3 -m json.tool
 
-# 5. Poll metrics
+# 6. Poll metrics
 watch -n 2 'curl -s http://localhost:8000/metrics | python3 -m json.tool'
 ```
 
